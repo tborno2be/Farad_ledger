@@ -54,7 +54,7 @@ EDITABLE = {
     "session":         {"notes"},
     "measurement":     {"notes"},
     "measurement_bundle": {"notes"},
-    "well_state":      {"ph", "solubility_m", "total_volume_ml", "notes"},
+    "well_state":      {"ph", "ph_test_id", "solubility_m", "total_volume_ml", "notes"},
     "ph_test":         {"calibration_id", "started_at", "ended_at", "final_ph",
                         "final_voltage", "acquisition_status", "end_reason", "notes"},
     "ocp_check":       {"notes"},
@@ -67,7 +67,8 @@ HIDDEN_TABLES = {"sqlite_sequence"}
 # FK 目标表 -> 用哪列当显示名（chip 文本）
 LABEL_COL = {"chemical": "name", "electrode": "name", "experiment": "experiment_name",
              "session": "session_name", "well": "position_name", "rack": "name",
-             "station": "name", "measurement": "filename", "artifact": "filename"}
+             "station": "name", "measurement": "filename", "artifact": "filename",
+             "ph_test": "final_ph"}
 _OPS = {"contains": "LIKE", "=": "=", "!=": "!=", ">": ">", "<": "<",
         ">=": ">=", "<=": "<=", "empty": "IS NULL", "notempty": "IS NOT NULL"}
 

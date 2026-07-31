@@ -147,7 +147,9 @@ CREATE TABLE IF NOT EXISTS well_state (
     version         INTEGER NOT NULL,        -- 该孔第几个状态；0 = unknown
     total_volume_ml REAL,
     solubility_m    REAL,                    -- 分析物溶解度 / M；可空（跳过）
-    ph              REAL,                    -- 孔溶液 pH（手动录入）；可空
+    ph              REAL,                    -- 孔溶液 pH 数值快照；可空
+    ph_test_id      INTEGER REFERENCES ph_test(ph_test_id),
+                    -- pH 的出处：哪次 ph_test 测的（时间/校准/原始数据顺链接可查）
     analyte_chemical_id        INTEGER REFERENCES chemical(chemical_id),
     analyte_concentration_m    REAL,
     acid_base_chemical_id      INTEGER REFERENCES chemical(chemical_id),

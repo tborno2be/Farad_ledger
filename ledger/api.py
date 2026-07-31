@@ -33,6 +33,9 @@ def _migrate(con) -> None:
         return [r[1] for r in con.execute(f"PRAGMA table_info({t})")]
     for table, col, ddl in (
             ("well_state", "ph", "ALTER TABLE well_state ADD COLUMN ph REAL"),
+            ("well_state", "ph_test_id",
+             "ALTER TABLE well_state ADD COLUMN ph_test_id INTEGER "
+             "REFERENCES ph_test(ph_test_id)"),
             ("wash", "cleancheck_measurement_id",
              "ALTER TABLE wash ADD COLUMN cleancheck_measurement_id INTEGER "
              "REFERENCES measurement(measurement_id)")):
@@ -122,7 +125,8 @@ class Ledger:
                          notes="auto-created: composition unknown")
 
     def new_state(self, experiment_id, well_id, *, total_volume_ml=None,
-                  solubility_m=None, ph=None, analyte=None, acid_base=None,
+                  solubility_m=None, ph=None, ph_test_id=None,
+                  analyte=None, acid_base=None,
                   supporting=None, source_type="opentrons_protocol",
                   source_protocol=None, source_git_hash=None, notes=None) -> int:
         """冻结一个新 state（自动结束旧 state、version+1）。
@@ -143,12 +147,20 @@ class Ledger:
         return self._ins("well_state", experiment_id=experiment_id, well_id=well_id,
                          version=(prev["version"] + 1 if prev else 1),
                          total_volume_ml=total_volume_ml, solubility_m=solubility_m,
-                         ph=ph,
+                         ph=ph, ph_test_id=ph_test_id,
                          analyte_chemical_id=a_id, analyte_concentration_m=a_c,
                          acid_base_chemical_id=b_id, acid_base_concentration_m=b_c,
                          supporting_chemical_id=s_id, supporting_concentration_m=s_c,
                          source_type=source_type, source_protocol=source_protocol,
                          source_git_hash=source_git_hash, created_at=now(), notes=notes)
+
+    def set_state_ph(self, state_id, ph_test_id):
+        """把一次 ph_test 设为该 state 的正式 pH（ph_test_id 链接 + final_ph 快照）。"""
+        r = self._one("SELECT final_ph FROM ph_test WHERE ph_test_id=?", ph_test_id)
+        if not r:
+            raise ValueError(f"ph_test {ph_test_id} 不存在")
+        self._upd("well_state", "state_id", state_id,
+                  ph=r["final_ph"], ph_test_id=ph_test_id)
 
     # ── 过程记录 ────────────────────────────────────────────────────────────
     def add_ocp(self, session_id, state_id, **f) -> int:
