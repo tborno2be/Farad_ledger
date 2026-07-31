@@ -24,7 +24,10 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import subprocess
 import sys
+import threading
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 
@@ -81,6 +84,31 @@ def _log_edit(entry: dict):
     entry["ts"] = datetime.now().isoformat(timespec="seconds")
     with EDIT_LOG.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    if entry["action"] == "update":
+        msg = f"dataset edit: {entry['table']} {entry['id']} ({', '.join(entry['changes'])})"
+    else:
+        msg = f"dataset add: {entry['table']} {entry['id']}"
+    _git_commit(msg)
+
+
+def _git_commit(msg):
+    """每笔编辑自动 commit —— 只提交 edit_log（库文件本身 gitignore，
+    跨机靠 seed/backfill/replay_edits 重放，编辑日志就是手改的可重放来源）。"""
+    try:
+        rel = str(EDIT_LOG.relative_to(ROOT))
+        base = ["git", "-C", str(ROOT)]
+        subprocess.run([*base, "add", "--", rel], capture_output=True)
+        r = subprocess.run([*base, "commit", "-m", msg, "--", rel],
+                           capture_output=True, text=True)
+        if r.returncode and "identity" in (r.stderr + r.stdout).lower():
+            r = subprocess.run([*base, "-c", "user.name=dataset",
+                                "-c", "user.email=dataset@local",
+                                "commit", "-m", msg, "--", rel],
+                               capture_output=True, text=True)
+        if r.returncode:
+            print("auto-commit 失败:", (r.stderr or r.stdout).strip())
+    except Exception as e:                                 # noqa: BLE001
+        print("auto-commit 失败:", e)
 
 
 def _schema(con):
@@ -301,6 +329,7 @@ def main():
         DB = Path(sys.argv[1])
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 8878
     print(f"dataset viewer · db={DB} · http://127.0.0.1:{port}")
+    threading.Timer(0.6, lambda: webbrowser.open(f"http://127.0.0.1:{port}")).start()
     app.run(host="127.0.0.1", port=port, debug=False)
 
 
