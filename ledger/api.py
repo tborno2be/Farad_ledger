@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -19,7 +20,12 @@ def now() -> str:
 
 
 def connect(db_path) -> sqlite3.Connection:
-    con = sqlite3.connect(str(db_path))
+    # check_same_thread=False：GUI 里 bridge 可能在 Flask 请求线程建立（如 CHEMICALS
+    # 页提交后被缓存），而事件在 run 工作线程触发——默认设置会炸
+    # "SQLite objects created in a thread can only be used in that same thread"
+    # (2026-07-31 test1 实测)。CPython 3.11+ sqlite3.threadsafety==3（serialized，
+    # 模块级串行化），跨线程共用一个连接是安全的。
+    con = sqlite3.connect(str(db_path), check_same_thread=False)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(SCHEMA.read_text(encoding="utf-8"))   # 幂等
@@ -51,6 +57,9 @@ def _jd(x):
 class Ledger:
     def __init__(self, db_path):
         self.con = connect(db_path)
+        # 跨线程共用一个连接：SQLite 非 serialized build 下同一连接不能并发使用，
+        # 所有走连接的漏斗（_ins/_upd/_one 及直接 execute 处）都拿这把锁。
+        self._lock = threading.RLock()
 
     def close(self):
         self.con.close()
@@ -59,20 +68,25 @@ class Ledger:
         cols = {k: _jd(v) for k, v in cols.items() if v is not None}
         keys = ",".join(cols)
         ph = ",".join("?" * len(cols))
-        cur = self.con.execute(f"INSERT INTO {table}({keys}) VALUES({ph})", list(cols.values()))
-        self.con.commit()
-        return cur.lastrowid
+        with self._lock:
+            cur = self.con.execute(f"INSERT INTO {table}({keys}) VALUES({ph})",
+                                   list(cols.values()))
+            self.con.commit()
+            return cur.lastrowid
 
     def _upd(self, table, id_col, id_val, **cols):
         cols = {k: _jd(v) for k, v in cols.items() if v is not None}
         if not cols:
             return
         sets = ",".join(f"{k}=?" for k in cols)
-        self.con.execute(f"UPDATE {table} SET {sets} WHERE {id_col}=?", [*cols.values(), id_val])
-        self.con.commit()
+        with self._lock:
+            self.con.execute(f"UPDATE {table} SET {sets} WHERE {id_col}=?",
+                             [*cols.values(), id_val])
+            self.con.commit()
 
     def _one(self, sql, *args):
-        return self.con.execute(sql, args).fetchone()
+        with self._lock:
+            return self.con.execute(sql, args).fetchone()
 
     # ── experiment / session ────────────────────────────────────────────────
     def get_or_create_experiment(self, name) -> int:
@@ -260,8 +274,10 @@ class Ledger:
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
         written = []
-        for r in self.con.execute("SELECT filename, content FROM artifact "
-                                  "WHERE measurement_id=?", (measurement_id,)):
+        with self._lock:
+            rows = self.con.execute("SELECT filename, content FROM artifact "
+                                    "WHERE measurement_id=?", (measurement_id,)).fetchall()
+        for r in rows:
             (out / r["filename"]).write_bytes(r["content"])
             written.append(str(out / r["filename"]))
         return written
@@ -289,13 +305,14 @@ class Ledger:
                       **{colmap[kind]: xid})
         if inputs:
             role, kind, xid = inputs[0]
-            self.con.execute(
-                f"""UPDATE analysis SET is_current=0 WHERE analysis_id != ? AND analysis_id IN
-                    (SELECT a.analysis_id FROM analysis a
-                     JOIN analysis_input i ON i.analysis_id=a.analysis_id
-                     WHERE a.analysis_type=? AND i.input_role=? AND i.{colmap[kind]}=?)""",
-                (aid, analysis_type, role, xid))
-            self.con.commit()
+            with self._lock:
+                self.con.execute(
+                    f"""UPDATE analysis SET is_current=0 WHERE analysis_id != ? AND analysis_id IN
+                        (SELECT a.analysis_id FROM analysis a
+                         JOIN analysis_input i ON i.analysis_id=a.analysis_id
+                         WHERE a.analysis_type=? AND i.input_role=? AND i.{colmap[kind]}=?)""",
+                    (aid, analysis_type, role, xid))
+                self.con.commit()
         return aid
 
     def save_find_peak(self, measurement_id, result, *, baseline_measurement_id=None,
