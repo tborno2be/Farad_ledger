@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .api import Ledger
 
-# 现役三电极（2026-07 兵役状态；名字与 GUI 默认一致）
+# 现役三电极（2026-07 现役状态，Eva 申明）
 ELECTRODES = [
     dict(name="WE-01", electrode_type="working", material="Pt",
          diameter_mm=2.0, area_cm2=0.0314),        # 2 mm Pt 盘电极；面积=几何面积 πr²
@@ -24,7 +24,8 @@ CHEMICALS = [
     ("H2SO4", "H2SO4"),
     ("water", "H2O"),
     ("methylene blue", "C16H18ClN3S"),
-    ("ferrocene", "C10H10Fe"),
+    ("FcMeOH", "C11H12FeO"),        # ferrocenemethanol（实际使用的 Fc 衍生物）
+    ("KCl", "KCl"),
 ]
 
 
