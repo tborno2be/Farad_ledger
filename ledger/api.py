@@ -383,6 +383,41 @@ class Ledger:
                       quality_status="accepted")
         return aid
 
+    def save_cottrell(self, measurement_id, fit, *, parameters=None) -> int:
+        """CA Cottrell 拟合 → ca_cottrell_result（is_current 版本化同 find_peak）。
+        fit = analysis.cottrell_fit 的返回 dict。"""
+        aid = self.new_analysis("ca_cottrell", algorithm_name="cottrell_fit",
+                                parameters=parameters,
+                                inputs=[("sample", "measurement", measurement_id)])
+        _f = lambda v: None if v is None or (isinstance(v, float) and v != v) else float(v)
+        self._ins("ca_cottrell_result", analysis_id=aid, measurement_id=measurement_id,
+                  beta=_f(fit.get("beta")), slope=_f(fit.get("slope")),
+                  intercept=_f(fit.get("intercept")), r_squared=_f(fit.get("r_squared")),
+                  fit_start_s=_f(fit.get("fit_start_s")), fit_end_s=_f(fit.get("fit_end_s")),
+                  tail_current_a=_f(fit.get("tail_current_a")),
+                  max_abs_current_a=_f(fit.get("max_abs_current_a")),
+                  quality_status=fit.get("quality_status", "accepted"),
+                  notes=fit.get("notes"))
+        return aid
+
+    def save_randles_sevcik(self, bundle_id, peak_group_id, fits, *,
+                            parameters=None) -> int:
+        """多扫速 bundle 的 Randles–Ševčík 拟合 → cv_randles_sevcik_result。
+        fits = [{branch:'anodic'|'cathodic', slope, intercept, r_squared, n}...]；
+        peak_group_id = 该 bundle 某 rate 的当前峰组（rate 增多时整组重存，
+        is_current 以 bundle 为范围翻转，旧拟合折叠）。"""
+        aid = self.new_analysis("cv_randles_sevcik", algorithm_name="randles_sevcik",
+                                parameters=parameters,
+                                inputs=[("subject", "bundle", bundle_id)])
+        _f = lambda v: None if v is None or (isinstance(v, float) and v != v) else float(v)
+        for f in fits or []:
+            self._ins("cv_randles_sevcik_result", analysis_id=aid, bundle_id=bundle_id,
+                      peak_group_id=peak_group_id, branch=f["branch"],
+                      n_points=f.get("n"), slope=_f(f.get("slope")),
+                      intercept=_f(f.get("intercept")), r_squared=_f(f.get("r_squared")),
+                      quality_status=f.get("quality_status", "accepted"))
+        return aid
+
     def save_is_clean(self, wash_id, verdict, *, baseline_measurement_id=None,
                       parameters=None) -> int:
         aid = self.new_analysis("wash_clean_check", algorithm_name="is_clean",
