@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Farad ledger · dataset</title>
+<style>
+:root{--bg:#fff;--fg:#37352f;--muted:#9b9a97;--line:#e9e9e7;--hov:#f7f6f4;
+      --chip:#e8f0fe;--chipfg:#1a56db;--pill:#f1f0ef;--accent:#2383e2;--ok:#d3f4e2}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 -apple-system,"Segoe UI",Helvetica,"PingFang SC",sans-serif;
+     color:var(--fg);background:var(--bg);display:flex;height:100vh;overflow:hidden}
+#side{width:220px;min-width:220px;border-right:1px solid var(--line);overflow-y:auto;
+      background:#fbfbfa;padding:8px 0}
+#side h1{font-size:13px;color:var(--muted);margin:6px 14px;font-weight:600}
+.tbl{padding:4px 14px;cursor:pointer;display:flex;justify-content:space-between}
+.tbl:hover{background:var(--hov)} .tbl.on{background:#efefed;font-weight:600}
+.tbl .n{color:var(--muted);font-size:12px}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#bar{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:8px;
+     align-items:center;flex-wrap:wrap}
+#bar b{font-size:16px}
+button,select,input{font:inherit;border:1px solid var(--line);border-radius:4px;
+     background:#fff;padding:3px 8px;color:var(--fg)}
+button{cursor:pointer} button:hover{background:var(--hov)}
+button.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+#wrap{flex:1;overflow:auto}
+table{border-collapse:collapse;min-width:100%}
+th,td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);
+      padding:5px 8px;text-align:left;white-space:nowrap;max-width:340px;
+      overflow:hidden;text-overflow:ellipsis}
+th{position:sticky;top:0;background:#fbfbfa;color:var(--muted);font-weight:500;
+   font-size:12px;cursor:pointer;user-select:none}
+th .ty{opacity:.6;margin-right:4px}
+tr:hover td{background:var(--hov)}
+td.pk{color:var(--muted);cursor:pointer} td.pk:hover{color:var(--accent)}
+td.ed{cursor:text} td.ed:hover::after{content:"✎";color:var(--muted);margin-left:4px}
+td.saved{background:var(--ok)!important;transition:background 1.5s}
+.chip{background:var(--chip);color:var(--chipfg);border-radius:10px;padding:1px 8px;
+      font-size:12px;cursor:pointer}
+.pill{background:var(--pill);border-radius:10px;padding:1px 8px;font-size:12px}
+.null{color:#c9c8c5}
+#filters{display:flex;gap:6px;flex-wrap:wrap}
+.frow{display:flex;gap:4px;align-items:center;background:var(--pill);
+      border-radius:4px;padding:2px 6px;font-size:12px}
+.frow .x{cursor:pointer;color:var(--muted)}
+#panel{width:0;min-width:0;border-left:1px solid var(--line);overflow-y:auto;
+       transition:width .15s;background:#fff}
+#panel.open{width:380px;min-width:380px;padding:16px}
+#panel h2{font-size:15px;margin:0 0 12px} #panel .x{float:right;cursor:pointer;color:var(--muted)}
+.prow{display:flex;margin-bottom:6px;font-size:13px}
+.prow .k{width:150px;min-width:150px;color:var(--muted)}
+.prow .v{flex:1;word-break:break-all;white-space:pre-wrap}
+.prow .v[data-ed]{cursor:text;border-radius:3px;padding:0 3px}
+.prow .v[data-ed]:hover{background:var(--hov)}
+.child{padding:5px 8px;background:var(--pill);border-radius:4px;margin:4px 0;
+       cursor:pointer;font-size:13px}
+.child:hover{background:#e5e4e2}
+#colmenu{position:absolute;background:#fff;border:1px solid var(--line);border-radius:6px;
+        box-shadow:0 4px 16px rgba(0,0,0,.12);padding:8px;z-index:10;display:none;
+        max-height:320px;overflow-y:auto}
+#colmenu label{display:block;padding:2px 6px;cursor:pointer}
+.ghead td{background:#f3f2f0!important;font-weight:600;border-right:none}
+#newform{padding:10px 12px;border-bottom:1px solid var(--line);background:#fdfdfc;
+        display:none;gap:6px;flex-wrap:wrap;align-items:center}
+#newform input,#newform select{width:150px}
+dialog{border:1px solid var(--line);border-radius:8px}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#37352f;
+       color:#fff;padding:6px 14px;border-radius:6px;display:none;z-index:20;font-size:13px}
+</style>
+</head>
+<body>
+<div id="side"><h1>DATASETS</h1><div id="tables"></div></div>
+<div id="main">
+  <div id="bar">
+    <b id="tname">—</b>
+    <span id="rcount" style="color:var(--muted);font-size:12px"></span>
+    <span style="flex:1"></span>
+    <span id="filters"></span>
+    <select id="fcol" title="加筛选"><option value="">+ 筛选</option></select>
+    <select id="fop" style="display:none">
+      <option value="contains">包含</option><option value="=">=</option>
+      <option value="!=">≠</option><option value=">">&gt;</option>
+      <option value="<">&lt;</option><option value="empty">为空</option>
+      <option value="notempty">非空</option></select>
+    <input id="fval" placeholder="值" style="display:none;width:110px">
+    <button id="fadd" style="display:none">✓</button>
+    <select id="gby"><option value="">不分组</option></select>
+    <button id="colbtn">列 ▾</button>
+    <button id="newbtn" class="pri" style="display:none">+ New</button>
+  </div>
+  <div id="newform"></div>
+  <div id="wrap"><table id="grid"><thead></thead><tbody></tbody></table></div>
+</div>
+<div id="panel"></div>
+<div id="colmenu"></div>
+<div id="toast"></div>
+<script>
+let SCHEMA={}, T=null, ROWS=[], FKL={}, sort={col:null,dir:'asc'};
+const $=q=>document.querySelector(q);
+const state=()=>JSON.parse(localStorage.getItem('ds_'+T)||'{"filters":[],"hidden":[],"group":"","sort":null}');
+const save=s=>localStorage.setItem('ds_'+T,JSON.stringify(s));
+const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';
+                setTimeout(()=>t.style.display='none',2200)};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function api(p,opt){const r=await fetch(p,opt);const j=await r.json();
+  if(!r.ok){toast(j.error||('HTTP '+r.status));throw j}return j}
+
+async function boot(){
+  SCHEMA=await api('/api/schema');
+  const div=$('#tables');div.innerHTML='';
+  Object.keys(SCHEMA).sort().forEach(t=>{
+    const d=document.createElement('div');d.className='tbl';d.dataset.t=t;
+    d.innerHTML=`<span>${t}</span><span class="n">${SCHEMA[t].count}</span>`;
+    d.onclick=()=>open(t);div.appendChild(d)});
+  const h=location.hash.slice(1);
+  open(h in SCHEMA?h:('experiment' in SCHEMA?'experiment':Object.keys(SCHEMA)[0]));
+}
+
+function open(t,presetFilter){
+  if(!(t in SCHEMA))t=Object.keys(SCHEMA)[0];
+  T=t;location.hash=t;
+  document.querySelectorAll('.tbl').forEach(e=>e.classList.toggle('on',e.dataset.t===t));
+  $('#tname').textContent=t;
+  $('#newbtn').style.display=SCHEMA[t].insertable?'':'none';
+  $('#newform').style.display='none';$('#panel').className='';$('#panel').innerHTML='';
+  const s=state();
+  if(presetFilter){s.filters=[presetFilter];save(s)}
+  sort=s.sort||{col:null,dir:'asc'};
+  const fc=$('#fcol');fc.innerHTML='<option value="">+ 筛选</option>';
+  const gb=$('#gby');gb.innerHTML='<option value="">不分组</option>';
+  SCHEMA[t].cols.forEach(c=>{
+    fc.add(new Option(c.name,c.name));
+    if(c.enum||c.fk||c.type==='INTEGER')gb.add(new Option('按 '+c.name,c.name))});
+  gb.value=s.group||'';
+  load();
+}
+
+async function load(){
+  const s=state();
+  const q=new URLSearchParams({filters:JSON.stringify(s.filters)});
+  if(sort.col){q.set('sort',sort.col);q.set('dir',sort.dir)}
+  const d=await api(`/api/table/${T}?`+q);
+  ROWS=d.rows;FKL=d.fk_labels;render();renderFilters();
+}
+
+function cellHtml(c,v,rid){
+  if(v===null||v===undefined)return `<span class="null">∅</span>`;
+  if(c.fk){const lb=(FKL[c.name]||{})[String(v)];
+    return `<span class="chip" data-jump="${c.fk.table}:${v}">${esc(lb?v+' · '+lb:v)}</span>`}
+  if(c.enum)return `<span class="pill">${esc(v)}</span>`;
+  return esc(v);
+}
+
+function render(){
+  const s=state(),cols=SCHEMA[T].cols.filter(c=>!s.hidden.includes(c.name)),pk=SCHEMA[T].pk;
+  $('#rcount').textContent=ROWS.length+' 行'+(ROWS.length>=200?'（前 200，用筛选缩小）':'');
+  const th=$('#grid thead');
+  th.innerHTML='<tr>'+cols.map(c=>{
+    const ty=c.pk?'🔑':c.fk?'↗':c.enum?'▾':c.type==='REAL'?'#':c.type==='INTEGER'?'#':'𝐀';
+    const ar=sort.col===c.name?(sort.dir==='asc'?' ↑':' ↓'):'';
+    return `<th data-c="${c.name}"><span class="ty">${ty}</span>${c.name}${ar}</th>`}).join('')+'</tr>';
+  th.querySelectorAll('th').forEach(e=>e.onclick=()=>{
+    const c=e.dataset.c;
+    sort=sort.col===c?(sort.dir==='asc'?{col:c,dir:'desc'}:{col:null,dir:'asc'}):{col:c,dir:'asc'};
+    const st=state();st.sort=sort;save(st);load()});
+  const tb=$('#grid tbody');tb.innerHTML='';
+  const groups=s.group?[...new Set(ROWS.map(r=>String(r[s.group])))]:[null];
+  groups.forEach(g=>{
+    if(g!==null){
+      const tr=tb.insertRow();tr.className='ghead';const td=tr.insertCell();
+      td.colSpan=cols.length;
+      const gc=SCHEMA[T].cols.find(c=>c.name===s.group);
+      const lb=gc&&gc.fk?((FKL[s.group]||{})[g]?g+' · '+(FKL[s.group]||{})[g]:g):g;
+      const n=ROWS.filter(r=>String(r[s.group])===g).length;
+      td.textContent=`${s.group} = ${lb==='null'?'∅':lb}  (${n})`;}
+    ROWS.filter(r=>g===null||String(r[s.group])===g).forEach(r=>{
+      const tr=tb.insertRow();tr.dataset.id=r[pk];
+      cols.forEach(c=>{
+        const td=tr.insertCell();td.dataset.c=c.name;
+        td.innerHTML=cellHtml(c,r[c.name],r[pk]);
+        if(c.pk){td.className='pk';td.title='打开行页面';
+          td.onclick=()=>page(r[pk]);}
+        else if(c.editable){td.className='ed';
+          td.ondblclick=td.onclick=e=>{if(!e.target.dataset.jump)edit(td,c,r)}}
+      })})});
+  tb.querySelectorAll('[data-jump]').forEach(e=>e.onclick=ev=>{ev.stopPropagation();
+    const[t,id]=e.dataset.jump.split(':');
+    open(t,{col:SCHEMA[t].pk,op:'=',val:+id})});
+}
+
+function editor(c,val){
+  let el;
+  if(c.enum){el=document.createElement('select');el.add(new Option('∅',''));
+    c.enum.forEach(o=>el.add(new Option(o,o)));el.value=val??''}
+  else if(c.fk){el=document.createElement('select');el.add(new Option('∅',''));
+    el.dataset.lazy=c.fk.table;el.value=''}
+  else{el=document.createElement('input');
+    el.type=(c.type==='REAL'||c.type==='INTEGER')?'number':'text';
+    el.step='any';el.value=val??''}
+  el.style.width='100%';return el;
+}
+
+async function fillFk(el,cur){
+  const d=await api('/api/fk_options/'+el.dataset.lazy);
+  d.options.forEach(([id,lb])=>el.add(new Option(lb,id)));
+  el.value=cur??'';
+}
+
+function edit(td,c,r){
+  if(td.querySelector('input,select'))return;
+  const pk=SCHEMA[T].pk,old=r[c.name];
+  const el=editor(c,old);td.innerHTML='';td.appendChild(el);el.focus();
+  if(el.dataset.lazy)fillFk(el,old);
+  const done=async ok=>{
+    if(ok){
+      let v=el.value===''?null:el.value;
+      if(v!==null&&(c.type==='REAL'||c.type==='INTEGER'))v=+v;
+      try{await api(`/api/row/${T}/${r[pk]}`,{method:'PATCH',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({[c.name]:v})});
+        r[c.name]=v;td.classList.add('saved');setTimeout(()=>td.classList.remove('saved'),1200)}
+      catch(e){}}
+    td.innerHTML=cellHtml(c,r[c.name],r[pk]);
+    td.querySelectorAll('[data-jump]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();
+      const[t,id]=x.dataset.jump.split(':');open(t,{col:SCHEMA[t].pk,op:'=',val:+id})});
+  };
+  el.onkeydown=e=>{if(e.key==='Enter')done(true);if(e.key==='Escape')done(false)};
+  el.onblur=()=>done(el.tagName==='SELECT');
+}
+
+async function page(rid){
+  const d=await api(`/api/row/${T}/${rid}`);
+  const p=$('#panel');p.className='open';
+  const cols=SCHEMA[T].cols;
+  p.innerHTML=`<span class="x" onclick="this.parentNode.className=''">✕</span>
+    <h2>${T} · ${rid}</h2>`+
+    cols.map(c=>{const v=d.row[c.name];
+      return `<div class="prow"><span class="k">${c.name}</span>
+        <span class="v" data-c="${c.name}" ${c.editable?'data-ed=1 title="点击编辑"':''}>
+        ${cellHtml(c,v,rid)}</span></div>`}).join('')+
+    (d.children.length?'<h2 style="margin-top:16px">关联（rollup）</h2>':'')+
+    d.children.map(ch=>`<div class="child" data-t="${ch.table}" data-col="${ch.col}">
+        ${ch.table} × ${ch.count} →</div>`).join('');
+  p.querySelectorAll('.child').forEach(e=>e.onclick=()=>
+    open(e.dataset.t,{col:e.dataset.col,op:'=',val:rid}));
+  p.querySelectorAll('[data-jump]').forEach(e=>e.onclick=()=>{
+    const[t,id]=e.dataset.jump.split(':');open(t,{col:SCHEMA[t].pk,op:'=',val:+id})});
+  p.querySelectorAll('.v[data-ed]').forEach(e=>e.onclick=()=>{
+    const c=cols.find(x=>x.name===e.dataset.c);
+    if(e.querySelector('input,select'))return;
+    const old=d.row[c.name];const el=editor(c,old);
+    e.innerHTML='';e.appendChild(el);el.focus();
+    if(el.dataset.lazy)fillFk(el,old);
+    const done=async ok=>{
+      if(ok){let v=el.value===''?null:el.value;
+        if(v!==null&&(c.type==='REAL'||c.type==='INTEGER'))v=+v;
+        try{await api(`/api/row/${T}/${rid}`,{method:'PATCH',
+          headers:{'Content-Type':'application/json'},body:JSON.stringify({[c.name]:v})});
+          d.row[c.name]=v;load()}catch(err){}}
+      e.innerHTML=cellHtml(c,d.row[c.name],rid)};
+    el.onkeydown=ev=>{if(ev.key==='Enter')done(true);if(ev.key==='Escape')done(false)};
+    el.onblur=()=>done(el.tagName==='SELECT')});
+}
+
+function renderFilters(){
+  const s=state(),f=$('#filters');f.innerHTML='';
+  s.filters.forEach((fl,i)=>{
+    const d=document.createElement('span');d.className='frow';
+    d.innerHTML=`${fl.col} ${fl.op} ${fl.val??''} <span class="x">✕</span>`;
+    d.querySelector('.x').onclick=()=>{const st=state();st.filters.splice(i,1);save(st);load()};
+    f.appendChild(d)});
+}
+
+$('#fcol').onchange=()=>{const on=!!$('#fcol').value;
+  ['#fop','#fval','#fadd'].forEach(q=>$(q).style.display=on?'':'none')};
+$('#fadd').onclick=()=>{
+  const st=state();
+  st.filters.push({col:$('#fcol').value,op:$('#fop').value,val:$('#fval').value});
+  save(st);$('#fcol').value='';$('#fval').value='';
+  ['#fop','#fval','#fadd'].forEach(q=>$(q).style.display='none');load()};
+$('#gby').onchange=()=>{const st=state();st.group=$('#gby').value;save(st);render()};
+$('#colbtn').onclick=e=>{
+  const m=$('#colmenu'),s=state();
+  m.style.display=m.style.display==='block'?'none':'block';
+  m.style.top=(e.target.getBoundingClientRect().bottom+4)+'px';
+  m.style.right='20px';
+  m.innerHTML=SCHEMA[T].cols.map(c=>
+    `<label><input type="checkbox" data-c="${c.name}" ${s.hidden.includes(c.name)?'':'checked'}> ${c.name}</label>`).join('');
+  m.querySelectorAll('input').forEach(i=>i.onchange=()=>{
+    const st=state();
+    st.hidden=[...m.querySelectorAll('input:not(:checked)')].map(x=>x.dataset.c);
+    save(st);render()})};
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#colmenu,#colbtn'))$('#colmenu').style.display='none'});
+$('#newbtn').onclick=()=>{
+  const nf=$('#newform');
+  if(nf.style.display==='flex'){nf.style.display='none';return}
+  nf.style.display='flex';nf.innerHTML='';
+  const inputs={};
+  SCHEMA[T].cols.filter(c=>!c.pk).forEach(c=>{
+    const w=document.createElement('span');
+    w.innerHTML=`<span style="font-size:11px;color:var(--muted)">${c.name}${c.notnull?' *':''}</span><br>`;
+    const el=editor(c,null);el.style.width='150px';
+    if(el.dataset.lazy)fillFk(el,null);
+    w.appendChild(el);inputs[c.name]=el;nf.appendChild(w)});
+  const ok=document.createElement('button');ok.className='pri';ok.textContent='保存';
+  ok.onclick=async()=>{
+    const body={};
+    for(const[k,el]of Object.entries(inputs)){
+      let v=el.value===''?null:el.value;
+      const c=SCHEMA[T].cols.find(x=>x.name===k);
+      if(v!==null&&(c.type==='REAL'||c.type==='INTEGER'))v=+v;
+      if(v!==null)body[k]=v}
+    try{await api('/api/row/'+T,{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      nf.style.display='none';toast('已添加');boot();open(T)}catch(e){}};
+  nf.appendChild(ok)};
+boot();
+</script>
+</body>
+</html>
