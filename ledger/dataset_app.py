@@ -152,6 +152,13 @@ def index():
 
 @app.get("/api/schema")
 def api_schema():
+    if not DB.exists() or DB.stat().st_size == 0:
+        return jsonify({"error": f"库不存在或为空：{DB}\n"
+                        "库文件不进 git，请先在本机重放：\n"
+                        "  python -m ledger.seed\n"
+                        "  python -m ledger.backfill_2026_07 <CVLabtest路径>\n"
+                        "  python -m ledger.backfill_couples <CVLabtest路径>\n"
+                        "  python -m ledger.replay_edits"}), 503
     con = _con()
     try:
         return jsonify(_schema(con))

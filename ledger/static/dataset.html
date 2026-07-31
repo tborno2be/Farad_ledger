@@ -107,7 +107,9 @@ async function api(p,opt){const r=await fetch(p,opt);const j=await r.json();
   if(!r.ok){toast(j.error||('HTTP '+r.status));throw j}return j}
 
 async function boot(){
-  SCHEMA=await api('/api/schema');
+  try{SCHEMA=await api('/api/schema')}
+  catch(e){$('#tables').innerHTML=`<div style="padding:10px 14px;white-space:pre-wrap;
+    color:#c0392b;font-size:12px">${esc(e.error||'库连不上')}</div>`;return}
   const div=$('#tables');div.innerHTML='';
   Object.keys(SCHEMA).sort().forEach(t=>{
     const d=document.createElement('div');d.className='tbl';d.dataset.t=t;
