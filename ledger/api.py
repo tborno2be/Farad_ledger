@@ -23,7 +23,22 @@ def connect(db_path) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(SCHEMA.read_text(encoding="utf-8"))   # 幂等
+    _migrate(con)
     return con
+
+
+def _migrate(con) -> None:
+    """轻量列迁移：老库缺新列时 ALTER 补上（CREATE IF NOT EXISTS 不会改旧表）。"""
+    def cols(t):
+        return [r[1] for r in con.execute(f"PRAGMA table_info({t})")]
+    for table, col, ddl in (
+            ("well_state", "ph", "ALTER TABLE well_state ADD COLUMN ph REAL"),
+            ("wash", "cleancheck_measurement_id",
+             "ALTER TABLE wash ADD COLUMN cleancheck_measurement_id INTEGER "
+             "REFERENCES measurement(measurement_id)")):
+        if col not in cols(table):
+            con.execute(ddl)
+    con.commit()
 
 
 def _jd(x):
@@ -107,12 +122,12 @@ class Ledger:
                          notes="auto-created: composition unknown")
 
     def new_state(self, experiment_id, well_id, *, total_volume_ml=None,
-                  solubility_m=None, analyte=None, acid_base=None, supporting=None,
-                  source_type="opentrons_protocol", source_protocol=None,
-                  source_git_hash=None, notes=None) -> int:
+                  solubility_m=None, ph=None, analyte=None, acid_base=None,
+                  supporting=None, source_type="opentrons_protocol",
+                  source_protocol=None, source_git_hash=None, notes=None) -> int:
         """冻结一个新 state（自动结束旧 state、version+1）。
         analyte / acid_base / supporting = {'chemical','formula'?,'concentration_m'?}
-        或 None；solubility_m = 分析物溶解度（M，可空）。"""
+        或 None；solubility_m = 分析物溶解度（M）；ph = 孔溶液 pH（均可空）。"""
         def _chem(c):
             if not c or not c.get("chemical"):
                 return None, None
@@ -128,6 +143,7 @@ class Ledger:
         return self._ins("well_state", experiment_id=experiment_id, well_id=well_id,
                          version=(prev["version"] + 1 if prev else 1),
                          total_volume_ml=total_volume_ml, solubility_m=solubility_m,
+                         ph=ph,
                          analyte_chemical_id=a_id, analyte_concentration_m=a_c,
                          acid_base_chemical_id=b_id, acid_base_concentration_m=b_c,
                          supporting_chemical_id=s_id, supporting_concentration_m=s_c,
@@ -164,7 +180,7 @@ class Ledger:
     def add_calibration(self, **f) -> int:
         return self._ins("probe_calibration", calibrated_at=f.pop("calibrated_at", now()), **f)
 
-    def add_ph_test(self, state_id, calibration_id, *, session_id=None, **f) -> int:
+    def add_ph_test(self, state_id, calibration_id=None, *, session_id=None, **f) -> int:
         return self._ins("ph_test", session_id=session_id, state_id=state_id,
                          calibration_id=calibration_id, **f)
 

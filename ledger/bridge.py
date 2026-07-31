@@ -163,13 +163,14 @@ class CVLabBridge:
 
     # ── 孔位组成提交（唯一来源：GUI CHEMICALS 页的手动录入）─────────────────
     def submit_state(self, d: dict) -> int:
-        """{plate, well, total_volume_ml, solubility_m,
+        """{plate, well, total_volume_ml, solubility_m, ph,
             analyte:{chemical,formula?,concentration_m?}, acid_base:{…},
             supporting:{…}, source_type, notes}"""
         wid = self.led.get_or_create_well(d.get("plate", "?"), d["well"])
         return self.led.new_state(self.experiment_id, wid,
                                   total_volume_ml=d.get("total_volume_ml"),
                                   solubility_m=d.get("solubility_m"),
+                                  ph=d.get("ph"),
                                   analyte=d.get("analyte"),
                                   acid_base=d.get("acid_base"),
                                   supporting=d.get("supporting"),
@@ -191,5 +192,5 @@ class CVLabBridge:
         keys = ("started_at", "ended_at", "final_ph", "final_voltage",
                 "stability_required", "stability_threshold_v", "reading_interval_s",
                 "acquisition_status", "end_reason", "data_path", "notes")
-        return self.led.add_ph_test(sid, d["calibration_id"],
+        return self.led.add_ph_test(sid, d.get("calibration_id"),
                                     **{k: d[k] for k in keys if k in d})

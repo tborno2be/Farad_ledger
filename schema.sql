@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS well_state (
     version         INTEGER NOT NULL,        -- 该孔第几个状态；0 = unknown
     total_volume_ml REAL,
     solubility_m    REAL,                    -- 分析物溶解度 / M；可空（跳过）
+    ph              REAL,                    -- 孔溶液 pH（手动录入）；可空
     analyte_chemical_id        INTEGER REFERENCES chemical(chemical_id),
     analyte_concentration_m    REAL,
     acid_base_chemical_id      INTEGER REFERENCES chemical(chemical_id),
@@ -229,7 +230,8 @@ CREATE TABLE IF NOT EXISTS ph_test (
     ph_test_id          INTEGER PRIMARY KEY,
     session_id          INTEGER REFERENCES session(session_id),
     state_id            INTEGER NOT NULL REFERENCES well_state(state_id),
-    calibration_id      INTEGER NOT NULL REFERENCES probe_calibration(calibration_id),
+    calibration_id      INTEGER REFERENCES probe_calibration(calibration_id),
+                        -- 可空：A 机离线，手动录入/事后脚本解析校准数据再回填
     started_at          TEXT,
     ended_at            TEXT,
     final_ph            REAL,
